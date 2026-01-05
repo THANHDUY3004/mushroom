@@ -3,69 +3,101 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Dự đoán Nấm Độc hay Ăn được</title>
+  <title>Mushroom AI - Dự đoán & Nhận dạng Nấm</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
-  <style>
-    /* Thêm một chút style để form gọn hơn */
-    .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
-    @media (max-width: 600px) { .form-grid { grid-template-columns: 1fr; } }
-  </style>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
 </head>
 <body>
+
   <div class="container">
-    <h1>🍄 Dự đoán Loại Nấm</h1>
-    <p class="subtitle">Nhập thông số đặc điểm để kiểm tra nấm có độc hay không</p>
+    <h1><i class="fas fa-fungus"></i> Mushroom AI</h1>
+    <p class="subtitle">Hệ thống trí tuệ nhân tạo dự đoán độ an toàn và định danh loài nấm</p>
 
     <form id="predict-form">
       <div class="form-grid">
         <div class="form-group">
-          <label for="cap-diameter">Đường kính mũ (cm):</label>
-          <input type="number" step="0.01" id="cap-diameter" name="cap-diameter" placeholder="Ví dụ: 15.2" required>
+          <label for="cap-diameter"><i class="fas fa-ruler-horizontal"></i> Đường kính mũ (cm):</label>
+          <input type="number" step="0.01" id="cap-diameter" name="cap-diameter" placeholder="Ví dụ: 8.5" required>
         </div>
 
         <div class="form-group">
-          <label for="stem-height">Chiều cao thân (cm):</label>
-          <input type="number" step="0.01" id="stem-height" name="stem-height" placeholder="Ví dụ: 16.9" required>
+          <label for="stem-height"><i class="fas fa-arrows-alt-v"></i> Chiều cao thân (cm):</label>
+          <input type="number" step="0.01" id="stem-height" name="stem-height" placeholder="Ví dụ: 12.0" required>
         </div>
 
         <div class="form-group">
-          <label for="stem-width">Độ rộng thân (mm):</label>
-          <input type="number" step="0.01" id="stem-width" name="stem-width" placeholder="Ví dụ: 17.1" required>
+          <label for="stem-width"><i class="fas fa-ruler-combined"></i> Độ rộng thân (mm):</label>
+          <input type="number" step="0.01" id="stem-width" name="stem-width" placeholder="Ví dụ: 15.0" required>
         </div>
 
         <div class="form-group">
-          <label for="cap-shape">Hình dạng mũ:</label>
+          <label for="cap-shape"><i class="fas fa-shapes"></i> Hình dạng mũ:</label>
           <select id="cap-shape" name="cap-shape">
-            <option value="x">Hình chuông (Bell)</option>
-            <option value="f">Phẳng (Flat)</option>
-            <option value="p">Hình nón (Conical)</option>
-            <option value="b">Lồi (Convex)</option>
-            <option value="c">Lõm (Sunken)</option>
+            <option value="x">Hình lồi (Convex)</option>
+            <option value="f">Hình phẳng (Flat)</option>
+            <option value="p">Hình chóp (Spherical)</option>
+            <option value="b">Hình chuông (Bell)</option>
+            <option value="c">Hình nón (Conical)</option>
+            <option value="s">Hình lõm (Sunken)</option>
+            <option value="o">Khác (Others)</option>
           </select>
         </div>
 
         <div class="form-group">
-          <label for="season">Mùa vụ:</label>
+          <label for="cap-color"><i class="fas fa-palette"></i> Màu sắc mũ:</label>
+          <select id="cap-color" name="cap-color">
+            <option value="n">Nâu (Brown)</option>
+            <option value="e">Đỏ (Red)</option>
+            <option value="g">Xám (Gray)</option>
+            <option value="r">Xanh lá (Green)</option>
+            <option value="w">Trắng (White)</option>
+            <option value="y">Vàng (Yellow)</option>
+            <option value="p">Hồng (Pink)</option>
+            <option value="u">Tím (Purple)</option>
+            <option value="b">Vàng nhạt (Buff)</option>
+            <option value="l">Xanh lơ (Blue)</option>
+            <option value="o">Cam (Orange)</option>
+            <option value="k">Đen (Black)</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label for="season"><i class="fas fa-calendar-alt"></i> Mùa vụ:</label>
           <select id="season" name="season">
-            <option value="s">Mùa xuân (Spring)</option>
-            <option value="u">Mùa hè (Summer)</option>
-            <option value="a">Mùa thu (Autumn)</option>
-            <option value="w">Mùa đông (Winter)</option>
+            <option value="a">Mùa Thu (Autumn)</option>
+            <option value="u">Mùa Hè (Summer)</option>
+            <option value="s">Mùa Xuân (Spring)</option>
+            <option value="w">Mùa Đông (Winter)</option>
           </select>
         </div>
       </div>
 
-      <button type="submit" class="btn" style="margin-top: 20px;">Kiểm tra độ an toàn</button>
+      <button type="submit" class="btn" id="submit-btn">
+        <span id="btn-text">Phân tích ngay</span>
+      </button>
     </form>
 
-    <div id="result" class="result-card" style="display:none; margin-top: 20px; padding: 20px; border-radius: 8px;">
-      <h2>Kết quả phân tích</h2>
-      <p>Loại nấm này có thể là: <strong id="prediction-value" style="font-size: 1.5em;">--</strong></p>
+    <div id="result" class="result-card" style="display:none;">
+      <h2>Kết quả phân tích AI</h2>
+      
+      <div class="res-item">
+        <small>Độ an toàn dự báo:</small>
+        <div id="prediction-value">--</div>
+      </div>
+
+      <div class="res-item" style="margin-top: 15px; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 15px;">
+        <small>Loài nấm có đặc điểm tương tự:</small>
+        <div id="suggested-name" style="color: #ffd700; font-weight: 700; font-size: 1.2em;">--</div>
+      </div>
+      
+      <p style="font-size: 12px; color: #aaa; margin-top: 20px; font-style: italic;">
+        ⚠️ Lưu ý: Kết quả chỉ mang tính chất tham khảo dựa trên mô hình máy tính. Tuyệt đối không ăn nấm lạ nếu không có chuyên gia xác nhận.
+      </p>
     </div>
 
-    <div id="error" class="error-card" style="display:none; color: red;">
-      <h2>Lỗi</h2>
-      <p id="error-message"></p>
+    <div id="error" class="error-card" style="display:none; color: #ff4d4d; margin-top: 20px;">
+      <i class="fas fa-exclamation-triangle"></i>
+      <span id="error-message"></span>
     </div>
   </div>
 
@@ -74,10 +106,14 @@
     const resultCard = document.getElementById('result');
     const errorCard = document.getElementById('error');
     const predictionSpan = document.getElementById('prediction-value');
+    const nameSpan = document.getElementById('suggested-name');
     const errorMessage = document.getElementById('error-message');
+    const btnText = document.getElementById('btn-text');
 
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
+      
+      btnText.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Đang phân tích...';
       resultCard.style.display = 'none';
       errorCard.style.display = 'none';
 
@@ -92,15 +128,16 @@
         const data = await res.json();
 
         if (data.success) {
-          predictionSpan.textContent = data.variety; // Trả về 'Ăn được' hoặc 'Có độc'
+          predictionSpan.textContent = data.variety;
+          nameSpan.textContent = data.suggested_name;
           
-          // Đổi màu nền kết quả dựa trên loại nấm
-          if (data.variety.includes("độc")) {
-            resultCard.style.backgroundColor = "#ffcccc";
-            predictionSpan.style.color = "#cc0000";
+          // CSS màu sắc theo kết quả
+          if (data.variety.includes("độc") || data.variety.includes("Poisonous")) {
+            predictionSpan.style.color = "#ff4d4d"; // Đỏ cho nấm độc
+            resultCard.style.borderColor = "#ff4d4d";
           } else {
-            resultCard.style.backgroundColor = "#ccffcc";
-            predictionSpan.style.color = "#008000";
+            predictionSpan.style.color = "#2ecc71"; // Xanh cho nấm ăn được
+            resultCard.style.borderColor = "#2ecc71";
           }
           
           resultCard.style.display = 'block';
@@ -109,8 +146,10 @@
           errorCard.style.display = 'block';
         }
       } catch (err) {
-        errorMessage.textContent = 'Không thể kết nối đến server.';
+        errorMessage.textContent = 'Không thể kết nối đến máy chủ AI.';
         errorCard.style.display = 'block';
+      } finally {
+        btnText.textContent = 'Phân tích ngay';
       }
     });
   </script>
