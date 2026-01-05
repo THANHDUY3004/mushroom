@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Dự đoán Nấm Độc hay Ăn được</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <style>
+    /* Thêm một chút style để form gọn hơn */
+    .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
+    @media (max-width: 600px) { .form-grid { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🍄 Dự đoán Loại Nấm</h1>
+    <p class="subtitle">Nhập thông số đặc điểm để kiểm tra nấm có độc hay không</p>
+
+    <form id="predict-form">
+      <div class="form-grid">
+        <div class="form-group">
+          <label for="cap-diameter">Đường kính mũ (cm):</label>
+          <input type="number" step="0.01" id="cap-diameter" name="cap-diameter" placeholder="Ví dụ: 15.2" required>
+        </div>
+
+        <div class="form-group">
+          <label for="stem-height">Chiều cao thân (cm):</label>
+          <input type="number" step="0.01" id="stem-height" name="stem-height" placeholder="Ví dụ: 16.9" required>
+        </div>
+
+        <div class="form-group">
+          <label for="stem-width">Độ rộng thân (mm):</label>
+          <input type="number" step="0.01" id="stem-width" name="stem-width" placeholder="Ví dụ: 17.1" required>
+        </div>
+
+        <div class="form-group">
+          <label for="cap-shape">Hình dạng mũ:</label>
+          <select id="cap-shape" name="cap-shape">
+            <option value="x">Hình chuông (Bell)</option>
+            <option value="f">Phẳng (Flat)</option>
+            <option value="p">Hình nón (Conical)</option>
+            <option value="b">Lồi (Convex)</option>
+            <option value="c">Lõm (Sunken)</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label for="season">Mùa vụ:</label>
+          <select id="season" name="season">
+            <option value="s">Mùa xuân (Spring)</option>
+            <option value="u">Mùa hè (Summer)</option>
+            <option value="a">Mùa thu (Autumn)</option>
+            <option value="w">Mùa đông (Winter)</option>
+          </select>
+        </div>
+      </div>
+
+      <button type="submit" class="btn" style="margin-top: 20px;">Kiểm tra độ an toàn</button>
+    </form>
+
+    <div id="result" class="result-card" style="display:none; margin-top: 20px; padding: 20px; border-radius: 8px;">
+      <h2>Kết quả phân tích</h2>
+      <p>Loại nấm này có thể là: <strong id="prediction-value" style="font-size: 1.5em;">--</strong></p>
+    </div>
+
+    <div id="error" class="error-card" style="display:none; color: red;">
+      <h2>Lỗi</h2>
+      <p id="error-message"></p>
+    </div>
+  </div>
+
+  <script>
+    const form = document.getElementById('predict-form');
+    const resultCard = document.getElementById('result');
+    const errorCard = document.getElementById('error');
+    const predictionSpan = document.getElementById('prediction-value');
+    const errorMessage = document.getElementById('error-message');
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      resultCard.style.display = 'none';
+      errorCard.style.display = 'none';
+
+      const formData = new FormData(form);
+
+      try {
+        const res = await fetch('/predict', {
+          method: 'POST',
+          body: formData
+        });
+
+        const data = await res.json();
+
+        if (data.success) {
+          predictionSpan.textContent = data.variety; // Trả về 'Ăn được' hoặc 'Có độc'
+          
+          // Đổi màu nền kết quả dựa trên loại nấm
+          if (data.variety.includes("độc")) {
+            resultCard.style.backgroundColor = "#ffcccc";
+            predictionSpan.style.color = "#cc0000";
+          } else {
+            resultCard.style.backgroundColor = "#ccffcc";
+            predictionSpan.style.color = "#008000";
+          }
+          
+          resultCard.style.display = 'block';
+        } else {
+          errorMessage.textContent = data.error || 'Có lỗi xảy ra.';
+          errorCard.style.display = 'block';
+        }
+      } catch (err) {
+        errorMessage.textContent = 'Không thể kết nối đến server.';
+        errorCard.style.display = 'block';
+      }
+    });
+  </script>
+</body>
+</html>
