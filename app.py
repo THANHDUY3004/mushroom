@@ -5,175 +5,126 @@ import joblib
 import os
 import logging
 
+# Khởi tạo ứng dụng Flask
 app = Flask(__name__)
 
-# Cau hinh logging de theo doi tren Terminal
+# --- 1. CẤU HÌNH LOGGING ---
+# Giúp theo dõi các hoạt động và lỗi của ứng dụng trong terminal/console
 logging.basicConfig(level=logging.INFO)
 
-# ==========================================
-# 1. TẢI MÔ HÌNH VÀ CÁC THÀNH PHẦN
-# ==========================================
-MODEL_PATH = "mushroom_final_model.pkl"
+# --- 2. TẢI MÔ HÌNH VÀ CÁC THÀNH PHẦN ---
+# Xác định thư mục hiện tại để tìm file mô hình .pkl chính xác
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+MODEL_PATH = os.path.join(BASE_DIR, "mushroom_random_forest_model.pkl")
 
-try:
-    if os.path.exists(MODEL_PATH):
-        bundle = joblib.load(MODEL_PATH)
-        model = bundle["classifier"]
-        scaler = bundle["scaler"]
-        encoders = bundle["encoders"]
-        feature_names = bundle["features"]
-        target_mapping = bundle["target_mapping"]
-        logging.info(f"✅ Da tai model. Mapping: {target_mapping}")
-    else:
-        logging.error("❌ Khong tim thay file mushroom_final_model.pkl")
-        model = None
-except Exception as e:
-    logging.error(f"❌ Loi load model: {e}")
-    model = None
+model_bundle = None
+# Kiểm tra nếu file mô hình tồn tại thì mới nạp vào bộ nhớ
+if os.path.exists(MODEL_PATH):
+    try:
+        # Nạp "chiếc hộp" pkl chứa: Model AI, Bộ chuẩn hóa (Scaler), Bộ mã hóa (Encoders)
+        model_bundle = joblib.load(MODEL_PATH)
+        logging.info(f"✅ Đã nạp thành công mô hình: {type(model_bundle['classifier']).__name__}")
+    except Exception as e:
+        logging.error(f"❌ Lỗi khi nạp file model: {e}")
+else:
+    logging.error(f"❌ Không tìm thấy file {MODEL_PATH}. Hãy chạy train.py trước!")
 
-# ==========================================
-# 2. HÀM GỢI Ý TÊN NẤM (DỰA TRÊN LOGIC)
-# ==========================================
-def get_mushroom_name(diam, shape, color, season):
-    # Logic nay hoat dong doc lap voi AI de goi y ten goi
-    if shape == 'x' and color == 'n' and season in ['a', 'w']:
-        return "Nam Huong (Shiitake)"
-    elif shape == 'b' and season == 'u':
-        return "Nam Rom (Paddy Straw)"
-    elif shape == 'x' and color == 'w' and diam < 8:
-        return "Nam Mo (White Button)"
-    elif shape == 'f' and diam > 10:
-        return "Nam Dui Ga / Bao Ngu"
-    elif color == 'r' and shape == 'x':
-        return "Nam Tan Doc (Amanita - Nguy hiem!)"
-    return "Chua xac dinh ten loai"
+# --- 3. CÁC ĐỊNH TUYẾN (ROUTES) ---
 
-# ==========================================
-# 3. ROUTES
-# ==========================================
 @app.route("/")
 def index():
+    """Route này trả về giao diện trang chủ (file index.html)"""
     return render_template("index.html")
 
 @app.route("/predict", methods=["POST"])
 def predict():
-    if model is None:
-        return jsonify({"success": False, "error": "Model chua duoc tai!"})
+    """Xử lý dữ liệu gửi từ Form và trả về kết quả dự đoán dạng JSON"""
+    if not model_bundle:
+        return jsonify({"success": False, "error": "Hệ thống AI chưa sẵn sàng. Kiểm tra file .pkl!"})
 
     try:
-        # Lay du lieu tu Form
-        form_data = request.form.to_dict()
+        # Lấy các thành phần đã đóng gói từ file pkl
+        model = model_bundle["classifier"]      # Mô hình Random Forest
+        scaler = model_bundle["scaler"]          # Bộ thước đo chuẩn hóa số
+        encoders = model_bundle["encoders"]      # Bộ dịch mã chữ (cap-shape, color...)
+        feature_names = model_bundle["features"] # Danh sách tên 6 cột đặc trưng
+        target_mapping = model_bundle["target_mapping"] # { 'e': 0, 'p': 1 }
         
-        # CHUAN BI MANG 20 COT (Phai dung thu tu luc Train)
+        # Đảo ngược bảng đối chiếu để chuyển số (0,1) về lại chữ (e,p)
+        inverse_target_mapping = {v: k for k, v in target_mapping.items()}
+
+        # 1. Thu thập dữ liệu từ Form (Web) gửi lên dưới dạng Dictionary
+        form_data = request.form.to_dict()
         input_row = []
         
+        # 2. Vòng lặp tiền xử lý dữ liệu theo đúng thứ tự Feature mà AI yêu cầu
         for col in feature_names:
-            val = form_data.get(col)
+            val = form_data.get(col, '').strip()
             
-            # Neu la cot so (Diameter, Height, Width)
-            if col in ['cap-diameter', 'stem-height', 'stem-width']:
-                try:
-                    input_row.append(float(val) if val and val.strip() != '' else 0.0)
-                except:
-                    input_row.append(0.0)
-            
-            # Neu la cot chu (Categorical)
-            else:
-                le = encoders.get(col)
-                # Neu o trong, dung 'unknown'
-                char_val = str(val) if (val and val.strip() != '') else 'unknown'
+            if col in encoders:
+                # Nếu là cột dạng chữ (cap-shape, color, season):
+                le = encoders[col]
+                char_val = val if val != '' else 'unknown'
                 
+                # Nếu người dùng chọn giá trị lạ, ép về nhãn 'unknown' để tránh lỗi sập web
+                if char_val not in le.classes_:
+                    char_val = 'unknown'
+                
+                # Chuyển chữ thành số bằng bộ mã hóa đã lưu
+                input_row.append(le.transform([char_val])[0])
+            else:
+                # Nếu là cột dạng số (đường kính, chiều cao...):
                 try:
-                    # Chuyen chu thanh so bang Encoder da hoc
-                    encoded_val = le.transform([char_val])[0]
-                    input_row.append(encoded_val)
+                    # Chuyển chuỗi nhập vào thành số thực (float)
+                    input_row.append(float(val) if val != '' else 0.0)
                 except:
-                    # Phong truong hop nhan la, dung nhan cua 'unknown'
-                    unknown_val = le.transform(['unknown'])[0]
-                    input_row.append(unknown_val)
+                    # Nếu nhập sai định dạng, mặc định trả về 0.0
+                    input_row.append(0.0)
 
-        # CHUAN HOA VA DU DOAN
-        input_scaled = scaler.transform([input_row])
+        # 3. CHUYỂN ĐỔI SANG DATAFRAME: Gắn lại tên cột cho dữ liệu để Scaler hoạt động chính xác
+        # Bước này cực kỳ quan trọng để tránh lỗi "Feature names mismatch"
+        input_df = pd.DataFrame([input_row], columns=feature_names)
+
+        # 4. CHUẨN HÓA DỮ LIỆU: Dùng bộ Scaler (thước đo) đã học được từ lúc Train
+        input_scaled = scaler.transform(input_df)
+
+        # 5. DỰ ĐOÁN: AI đưa ra kết quả cuối cùng (trả về số 0 hoặc 1)
         prediction_num = model.predict(input_scaled)[0]
         
-        # DICH KET QUA (Dua tren target_mapping {'e': 0, 'p': 1})
-        # prediction_num == 0 nghia la 'e' (Edible)
-        if prediction_num == target_mapping.get('e', 0):
-            result_text = "An duoc (Edible) ✅"
-        else:
-            result_text = "Co doc (Poisonous) 💀"
+        # 6. TÍNH ĐỘ TIN CẬY: Lấy xác suất cao nhất trong các cây quyết định
+        try:
+            probs = model.predict_proba(input_scaled)[0]
+            confidence = float(np.max(probs)) * 100
+        except:
+            confidence = 100.0
 
-        # GOI Y TEN LOAI
-        suggested = get_mushroom_name(
-            float(form_data.get('cap-diameter', 0)),
-            form_data.get('cap-shape', 'x'),
-            form_data.get('cap-color', 'n'),
-            form_data.get('season', 'a')
-        )
+        # 7. GIẢI MÃ KẾT QUẢ: Chuyển từ số (0,1) về thông điệp dễ hiểu cho người dùng
+        result_label = inverse_target_mapping.get(prediction_num)
+        is_edible = (result_label == 'e')
+        
+        result_text = "ĂN ĐƯỢC ✅" if is_edible else "CÓ ĐỘC - NGUY HIỂM 💀"
+        class_css = "text-success" if is_edible else "text-danger"
 
+        # In log ra terminal để bạn dễ dàng theo dõi dữ liệu đang xử lý
+        logging.info(f"Dữ liệu nhập: {input_row} => Kết quả: {result_text} ({confidence:.1f}%)")
+
+        # 8. TRẢ KẾT QUẢ: Gửi dữ liệu về lại cho JavaScript trên trình duyệt hiển thị
         return jsonify({
             "success": True,
             "variety": result_text,
-            "suggested_name": suggested
+            "class_css": class_css,
+            "confidence": f"{confidence:.1f}%"
         })
 
     except Exception as e:
-        logging.error(f"Loi predict: {e}")
-        return jsonify({"success": False, "error": str(e)})
-def quick_test():
-    # 1. Tai file model
-    try:
-        data = joblib.load("mushroom_final_model.pkl")
-        model = data["classifier"]
-        scaler = data["scaler"]
-        encoders = data["encoders"]
-        feature_names = data["features"]
-        mapping = data["target_mapping"]
-        print("✅ Da tai model thanh cong!")
-    except:
-        print("❌ Khong tim thay file mushroom_final_model.pkl")
-        return
+        # Nếu có bất kỳ lỗi nào xảy ra trong quá trình trên, ghi lại log và báo lỗi
+        logging.error(f"Lỗi xử lý dự đoán: {e}")
+        return jsonify({"success": False, "error": f"Lỗi hệ thống: {str(e)}"})
 
-    # 2. Dinh nghia cac kich ban test (Gia lap du lieu tu Form)
-    test_cases = [
-        {
-            "name": "Kich ban 1: Nam Huong (An duoc)",
-            "data": {'cap-diameter': 15.0, 'stem-height': 16.0, 'stem-width': 17.0, 
-                     'cap-shape': 'x', 'cap-color': 'n', 'season': 'a'}
-        },
-        {
-            "name": "Kich ban 2: Nam Doc (Mau doc)",
-            "data": {'cap-diameter': 2.5, 'stem-height': 4.8, 'stem-width': 3.2, 
-                     'cap-shape': 'b', 'cap-color': 'n', 'season': 'u'}
-        }
-    ]
-
-    print("\n--- BAT DAU KIEM TRA NHANH ---")
-    
-    for case in test_cases:
-        print(f"\n[Testing: {case['name']}]")
-        
-        # Chuan bi mang 20 phan tu dung thu tu features
-        input_row = []
-        for col in feature_names:
-            val = case['data'].get(col)
-            
-            if col in ['cap-diameter', 'stem-height', 'stem-width']:
-                input_row.append(float(val) if val else 0.0)
-            else:
-                le = encoders.get(col)
-                # Neu thong so khong co trong kich ban, dung 'unknown'
-                char_val = str(val) if val else 'unknown'
-                input_row.append(le.transform([char_val])[0])
-        
-        # Chuan hoa va du doan
-        input_scaled = scaler.transform([input_row])
-        pred = model.predict(input_scaled)[0]
-        
-        # Dich ket qua
-        result = "AN DUOC ✅" if pred == mapping['e'] else "CO DOC 💀"
-        print(f"-> Ket qua AI tra ve: {result}")
+# --- 4. CHẠY SERVER ---
 if __name__ == "__main__":
-    quick_test()
-    print("\n🚀 Mushroom AI dang chay tai: http://127.0.0.1:5000")
-    app.run(host='127.0.0.1', port=5000, debug=True)
+    # Lấy cổng (Port) từ hệ thống (Dùng cho Render) hoặc mặc định là 5000 (Local)
+    port = int(os.environ.get("PORT", 5000))
+    # host='0.0.0.0' để server có thể truy cập được từ bên ngoài internet
+    # debug=True để tự động tải lại code khi bạn lưu file và hiện lỗi chi tiết
+    app.run(host='0.0.0.0', port=port, debug=True)
