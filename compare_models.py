@@ -92,8 +92,11 @@ def load_and_prepare(path='secondary_data.csv'):
 # =========================
 def build_models():
     return {
-        "Cây quyết định (Decision Tree)": 
-            DecisionTreeClassifier(criterion="entropy", random_state=42),
+        "Cây quyết định (Decision Tree – Gini)": 
+            DecisionTreeClassifier(criterion="gini", max_depth=10, random_state=42),
+
+        "Cây quyết định (Decision Tree – Entropy)": 
+            DecisionTreeClassifier(criterion="entropy", max_depth=10, random_state=42),
 
         "Rừng ngẫu nhiên (Random Forest)": 
             RandomForestClassifier(n_estimators=200, random_state=42, n_jobs=-1),
@@ -107,6 +110,7 @@ def build_models():
         "Xác suất Bayes (Naive Bayes)": 
             GaussianNB()
     }
+
 
 # =========================
 # 4. ĐÁNH GIÁ MÔ HÌNH
